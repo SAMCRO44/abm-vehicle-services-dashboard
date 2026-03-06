@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABM Rental Operations Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f5f7;
+  --bg-elevated: #ffffff;
+  --border: rgba(0,0,0,.08);
+  --border-subtle: rgba(0,0,0,.06);
+  --text: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #86868b;
+  --blue: #0071e3;
+  --blue-hover: #0077ed;
+  --blue-light: rgba(0,113,227,.12);
+  --green: #30d158;
+  --green-light: rgba(48,209,88,.12);
+  --orange: #ff9f0a;
+  --orange-light: rgba(255,159,10,.12);
+  --red: #ff453a;
+  --red-light: rgba(255,69,58,.12);
+  --purple: #bf5af2;
+  --purple-light: rgba(191,90,242,.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --shadow: 0 2px 12px rgba(0,0,0,.06);
+  --shadow-hover: 0 8px 24px rgba(0,0,0,.08);
+  --transition: .2s cubic-bezier(.25,.1,.25,1);
+}
+html { -webkit-font-smoothing: antialiased; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Text', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.47;
+  font-size: 15px;
+}
+
+/* Header */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 52px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.logo {
+  background: var(--blue);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+}
+.header-title { font-size: 17px; font-weight: 600; letter-spacing: -.022em; }
+.header-date { font-size: 14px; color: var(--text-tertiary); }
+.import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 18px;
+  border-radius: 980px;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.import-btn:hover { background: var(--blue-hover); transform: scale(1.02); }
+.import-btn:active { transform: scale(.98); }
+.import-btn.drag { box-shadow: 0 0 0 4px var(--blue-light); }
+#file-input { display: none; }
+
+/* Tabs - Apple segmented style */
+.tabs-wrap {
+  padding: 16px 24px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  background: rgba(0,0,0,.06);
+  border-radius: 10px;
+  min-width: min-content;
+}
+.tab {
+  display: inline-block;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: var(--transition);
+  white-space: nowrap;
+  border: none;
+  background: none;
+  font-family: inherit;
+  line-height: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+/* Date filter bar */
+.date-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background: rgba(255,255,255,.5);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.date-label { font-size: 12px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; }
+.date-bar input[type="date"] {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--bg-elevated);
+}
+.date-bar input[type="date"]:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-light);
+}
+.date-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.date-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 980px;
+  background: rgba(0,0,0,.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.date-pill:hover { background: var(--blue-light); color: var(--blue); }
+.date-pill.active { background: var(--blue); color: #fff; }
+.date-clear { font-size: 12px; font-weight: 600; color: var(--red); cursor: pointer; padding: 4px 10px; }
+.date-clear:hover { background: var(--red-light); border-radius: var(--radius-sm); }
+.date-info { font-size: 12px; color: var(--text-tertiary); margin-left: auto; }
+
+/* Main content */
+.main {
+  padding: 28px 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.panel { display: none; }
+.panel.active {
+  display: block;
+  animation: fadeIn .25s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+}
+.stat-card:hover { box-shadow: var(--shadow-hover); }
+.stat-icon { font-size: 24px; margin-bottom: 12px; }
+.stat-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+.stat-value { font-size: 28px; font-weight: 700; letter-spacing: -.03em; line-height: 1.2; }
+.stat-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.stat-card.blue .stat-value { color: var(--blue); }
+.stat-card.green .stat-value { color: var(--green); }
+.stat-card.orange .stat-value { color: var(--orange); }
+.stat-card.red .stat-value { color: var(--red); }
+.stat-card.purple .stat-value { color: var(--purple); }
+
+/* Cards */
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.card-title { font-size: 16px; font-weight: 600; letter-spacing: -.02em; }
+.card-badge { font-size: 11px; font-weight: 600; padding: 4px 10px; background: var(--blue-light); color: var(--blue); border-radius: 980px; }
+
+/* Charts */
+.chart-wrap { height: 220px; position: relative; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+.table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+.table-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,.2); border-radius: 3px; }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
+}
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.table tbody tr:hover td { background: rgba(0,113,227,.04); }
+.table .cell-name { font-weight: 600; color: var(--text); }
+.table .cell-mono { font-family: ui-monospace, monospace; font-size: 13px; }
+
+.hmap { border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+.hmap .hl-name { padding: 6px 10px; position: sticky; left: 0; background: var(--bg-elevated); font-weight: 500; border-right: 1px solid var(--border-subtle); max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.hmap .hl-dh { padding: 4px 6px; color: var(--text-tertiary); font-size: 10px; text-align: center; }
+.hmap .hl-avg { padding: 6px 10px; color: var(--blue); font-weight: 600; }
+.hmap .dc { min-width: 32px; text-align: center; padding: 4px 6px; font-size: 10px; }
+
+/* Segmented controls */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  background: rgba(0,0,0,.06);
+  border-radius: var(--radius-sm);
+}
+.segmented-item {
+  font-size: 13px; font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.segmented-item:hover { color: var(--text); }
+.segmented-item.active { background: var(--bg-elevated); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+/* Search */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(0,0,0,.04);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  width: 220px;
+  transition: var(--transition);
+}
+.search-box:focus-within { background: var(--bg-elevated); border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-light); }
+.search-box input { flex: 1; border: none; background: none; font-size: 14px; outline: none; }
+
+/* Progress bars */
+.progress { height: 6px; background: rgba(0,0,0,.08); border-radius: 3px; overflow: hidden; min-width: 60px; }
+.progress-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+
+/* Badges */
+.badge { display: inline-flex; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+.badge-blue { background: var(--blue-light); color: var(--blue); }
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-orange { background: var(--orange-light); color: var(--orange); }
+.badge-red { background: var(--red-light); color: var(--red); }
+.badge-purple { background: var(--purple-light); color: var(--purple); }
+
+/* Utility */
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+.empty { text-align: center; color: var(--text-tertiary); padding: 40px; font-size: 14px; }
+
+/* Location rows */
+.loc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.loc-row:last-child { border-bottom: none; }
+.loc-name { flex: 1; font-size: 14px; font-weight: 500; }
+.loc-count { font-size: 16px; font-weight: 700; min-width: 40px; text-align: right; }
+.loc-bar { flex: 1; max-width: 120px; }
+
+/* Payroll rows */
+.pay-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+.pay-row:last-child { border-bottom: none; }
+.pay-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pay-label { flex: 1; font-size: 14px; font-weight: 500; }
+.pay-bar { flex: 1; max-width: 140px; }
+.pay-value { font-size: 18px; font-weight: 700; }
+
+/* Compare */
+.cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+@media (max-width: 900px) { .cmp-grid { grid-template-columns: 1fr; } }
+.cmp-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+.cmp-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.cmp-dot { width: 10px; height: 10px; border-radius: 50%; }
+.cmp-title { font-size: 15px; font-weight: 600; }
+.cmp-stat { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: 14px; }
+.cmp-stat:last-child { border-bottom: none; }
+.cmp-k { color: var(--text-secondary); font-weight: 500; }
+.cmp-v { font-weight: 700; font-size: 16px; }
+.diff-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; margin-left: 8px; }
+.diff-pos { background: var(--green-light); color: var(--green); }
+.diff-neg { background: var(--red-light); color: var(--red); }
+
+/* DOW cards */
+.dow-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 20px; }
+@media (max-width: 800px) { .dow-grid { grid-template-columns: repeat(4, 1fr); } }
+.dow-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: center;
+  transition: var(--transition);
+}
+.dow-card:hover { border-color: var(--blue); background: var(--blue-light); }
+.dow-name { font-size: 11px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 6px; }
+.dow-val { font-size: 20px; font-weight: 700; }
+
+/* Toast */
+.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 8px 32px rgba(0,0,0,.12);
+  animation: slideIn .3s ease;
+  min-width: 260px;
+}
+.toast.ok { border-left: 4px solid var(--green); }
+.toast.err { border-left: 4px solid var(--red); }
+.toast.inf { border-left: 4px solid var(--blue); }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+/* Source chips */
+.source-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.source-chip {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 980px;
+  background: rgba(0,0,0,.06);
+  color: var(--text-secondary);
+}
+.source-chip.active { background: var(--green-light); color: var(--green); }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <span class="logo">ABM</span>
+    <span class="header-title">Rental Operations Dashboard</span>
+    <span class="header-date" id="hdr-date">—</span>
+  </div>
+  <label class="import-btn" id="import-btn">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Import File
+    <input type="file" id="file-input" accept=".xlsx,.xls" multiple>
+  </label>
+</header>
+
+<div class="tabs-wrap">
+  <div class="tabs" id="tabs" role="tablist">
+    <button type="button" class="tab active" data-tab="overview" role="tab">Overview</button>
+    <button type="button" class="tab" data-tab="workers" role="tab">Workers</button>
+    <button type="button" class="tab" data-tab="tasks" role="tab">Task Types</button>
+    <button type="button" class="tab" data-tab="locations" role="tab">Locations</button>
+    <button type="button" class="tab" data-tab="payroll" role="tab">Hours & Pay</button>
+    <button type="button" class="tab" data-tab="performance" role="tab">Performance</button>
+    <button type="button" class="tab" data-tab="trends" role="tab">Staffing Trends</button>
+    <button type="button" class="tab" data-tab="compare" role="tab">Compare</button>
+  </div>
+</div>
+
+<div class="date-bar" id="date-bar">
+  <span class="date-label">Date Range</span>
+  <input type="date" id="date-start">
+  <span>→</span>
+  <input type="date" id="date-end">
+  <div class="date-pills">
+    <span class="date-pill" data-preset="today">Today</span>
+    <span class="date-pill" data-preset="week">This Week</span>
+    <span class="date-pill" data-preset="lastweek">Last Week</span>
+    <span class="date-pill" data-preset="month">This Month</span>
+    <span class="date-pill" data-preset="lastmonth">Last Month</span>
+    <span class="date-pill" data-preset="all">All Time</span>
+  </div>
+  <span class="date-clear" id="date-clear" style="display:none">Clear</span>
+  <span class="date-info" id="date-info"></span>
+</div>
+
+<div class="main">
+  <div class="source-bar" id="source-bar">
+    <span class="source-chip active">Field Ops</span>
+    <span class="source-chip active">Payroll</span>
+    <span class="source-chip active">Hours Overview</span>
+  </div>
+
+  <div class="panel active" id="panel-overview" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat-card blue"><div class="stat-icon">🚗</div><div class="stat-label">Total Moves</div><div class="stat-value" id="o-moves">1,650</div><div class="stat-sub" id="o-date">—</div></div>
+      <div class="stat-card green"><div class="stat-icon">👥</div><div class="stat-label">Active Workers</div><div class="stat-value" id="o-wkrs">63</div><div class="stat-sub">on shift</div></div>
+      <div class="stat-card orange"><div class="stat-icon">⏱</div><div class="stat-label">Avg Move Time</div><div class="stat-value" id="o-avg">—</div><div class="stat-sub">min:sec</div></div>
+      <div class="stat-card purple"><div class="stat-icon">⚡</div><div class="stat-label">Sub-Min Moves</div><div class="stat-value" id="o-sub">459</div><div class="stat-sub" id="o-subpct">27.8% of total</div></div>
+      <div class="stat-card red"><div class="stat-icon">🚫</div><div class="stat-label">Blocked</div><div class="stat-value" id="o-blk">35</div><div class="stat-sub">moves blocked</div></div>
+      <div class="stat-card blue"><div class="stat-icon">💼</div><div class="stat-label">Total Paid Hrs</div><div class="stat-value" id="o-phrs">1,154</div><div class="stat-sub">reg + overtime</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div class="card"><div class="card-header"><div class="card-title">Hourly Activity</div><span class="card-badge" id="o-pk">—</span></div><div class="chart-wrap"><canvas id="c-hly"></canvas></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">Task Type Mix</div><span class="card-badge" id="o-ttl">—</span></div><div class="chart-wrap"><canvas id="c-tdn"></canvas></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card"><div class="card-header"><div class="card-title">Top 10 Workers</div></div><div class="chart-wrap" style="height:260px"><canvas id="c-topw"></canvas></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">Top Destinations</div></div><div class="chart-wrap" style="height:260px"><canvas id="c-dest"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-workers" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat-card blue"><div class="stat-icon">👥</div><div class="stat-label">Workers</div><div class="stat-value" id="w-tot">63</div><div class="stat-sub">on shift</div></div>
+      <div class="stat-card green"><div class="stat-icon">🏆</div><div class="stat-label">Top Volume</div><div class="stat-value" id="w-top" style="font-size:18px">—</div><div class="stat-sub" id="w-top2">—</div></div>
+      <div class="stat-card purple"><div class="stat-icon">⚡</div><div class="stat-label">Fastest Avg</div><div class="stat-value" id="w-fast" style="font-size:18px">—</div><div class="stat-sub" id="w-fast2">—</div></div>
+      <div class="stat-card orange"><div class="stat-icon">📊</div><div class="stat-label">Avg Moves</div><div class="stat-value" id="w-avgm">26</div><div class="stat-sub">per worker</div></div>
+      <div class="stat-card red"><div class="stat-icon">🚫</div><div class="stat-label">Avg Gap</div><div class="stat-value" id="w-gap" style="font-size:18px">—</div><div class="stat-sub" id="w-gap2">—</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header" style="flex-wrap:wrap;gap:12px">
+        <div class="card-title">All Workers</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div class="segmented" id="worker-sort">
+            <span class="segmented-item active" data-sort="count">Volume</span>
+            <span class="segmented-item" data-sort="avg_secs">Speed</span>
+            <span class="segmented-item" data-sort="sub">Sub-Min</span>
+            <span class="segmented-item" data-sort="gap">Gap</span>
+          </div>
+          <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input type="text" id="worker-search" placeholder="Search…"></div>
+        </div>
+      </div>
+      <div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Worker</th><th>Moves</th><th>Avg Time</th><th>Fastest</th><th>Slowest</th><th>Sub-Min</th><th>Avg Gap</th><th>Volume</th></tr></thead><tbody id="wtb"></tbody></table></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-tasks" role="tabpanel">
+    <div class="card"><div class="card-header"><div class="card-title">Avg Time by Task Type</div><span class="card-badge" id="tk-lbl">—</span></div><div class="chart-wrap" style="height:240px"><canvas id="c-tbar"></canvas></div></div>
+    <div class="card"><div class="card-header"><div class="card-title">Full Breakdown</div></div><div class="table-wrap"><table class="table"><thead><tr><th>Task Type</th><th>Count</th><th>Avg (min)</th><th>Avg (sec)</th><th>Fastest</th><th>Slowest</th><th>% Total</th><th>Volume</th></tr></thead><tbody id="ttb"></tbody></table></div></div>
+  </div>
+
+  <div class="panel" id="panel-locations" role="tabpanel">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div class="card"><div class="card-header"><div class="card-title">Start Locations</div><span class="card-badge" id="sl-tot">—</span></div><div id="slg"></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">End Locations</div><span class="card-badge" id="el-tot">—</span></div><div id="elg"></div></div>
+    </div>
+    <div class="card"><div class="card-header"><div class="card-title">Worker × Destination</div><span class="card-badge" id="piv-lbl">—</span></div><div class="table-wrap" id="piv-wrap"><table class="table"><thead id="piv-hdr"></thead><tbody id="piv-body"></tbody></table></div></div>
+  </div>
+
+  <div class="panel" id="panel-payroll" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat-card blue"><div class="stat-icon">💼</div><div class="stat-label">Regular Hours</div><div class="stat-value" id="p-reg">918.8</div><div class="stat-sub">paid</div></div>
+      <div class="stat-card red"><div class="stat-icon">⏰</div><div class="stat-label">Overtime</div><div class="stat-value" id="p-ot">235.1</div><div class="stat-sub" id="p-otpct">—</div></div>
+      <div class="stat-card orange"><div class="stat-icon">☕</div><div class="stat-label">Lunch</div><div class="stat-value" id="p-lu">34.1</div><div class="stat-sub">unpaid</div></div>
+      <div class="stat-card green"><div class="stat-icon">👥</div><div class="stat-label">Employees</div><div class="stat-value" id="p-emp">94</div><div class="stat-sub">on payroll</div></div>
+      <div class="stat-card purple"><div class="stat-icon">⚡</div><div class="stat-label">Total Paid</div><div class="stat-value" id="p-tot">1,154</div><div class="stat-sub">hrs</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card"><div class="card-header"><div class="card-title">Hours Distribution</div></div><div class="chart-wrap" style="height:260px"><canvas id="c-pdn"></canvas></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">Payroll Summary</div></div><div id="p-sum"></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-performance" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat-card purple"><div class="stat-icon">⚡</div><div class="stat-label">Sub-Min Moves</div><div class="stat-value" id="pf-sub">459</div><div class="stat-sub">&lt; 60 sec</div></div>
+      <div class="stat-card orange"><div class="stat-icon">👤</div><div class="stat-label">Workers w/ Sub-Min</div><div class="stat-value" id="pf-wkrs">49</div><div class="stat-sub">out of 63</div></div>
+      <div class="stat-card green"><div class="stat-icon">🔥</div><div class="stat-label">Fastest Avg</div><div class="stat-value" id="pf-fast" style="font-size:18px">—</div><div class="stat-sub" id="pf-fast2">—</div></div>
+      <div class="stat-card red"><div class="stat-icon">🚫</div><div class="stat-label">Blocked</div><div class="stat-value" id="pf-blk">35</div><div class="stat-sub">by Foundry</div></div>
+      <div class="stat-card blue"><div class="stat-icon">📉</div><div class="stat-label">Sub-Min Rate</div><div class="stat-value" id="pf-pct">27.8%</div><div class="stat-sub">of moves</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div class="card"><div class="card-header"><div class="card-title">Sub-Min by Worker</div><span class="card-badge" id="sub-lbl">—</span></div><div class="chart-wrap" style="height:280px"><canvas id="c-sub"></canvas></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">Avg Gap (Top 20)</div></div><div class="table-wrap"><table class="table"><thead><tr><th>Worker</th><th>Avg Gap</th><th>Samples</th><th>Bar</th></tr></thead><tbody id="gap-tb"></tbody></table></div></div>
+    </div>
+    <div class="card"><div class="card-header"><div class="card-title">Scans Heatmap</div><span class="card-badge" id="hmap-lbl">—</span></div><div id="hmap-div" class="table-wrap"></div></div>
+  </div>
+
+  <div class="panel" id="panel-trends" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat-card blue"><div class="stat-icon">📅</div><div class="stat-label">Days</div><div class="stat-value" id="tr-days">567</div><div class="stat-sub" id="tr-months">—</div></div>
+      <div class="stat-card green"><div class="stat-icon">⏱</div><div class="stat-label">Avg Actual Hrs</div><div class="stat-value" id="tr-avg">—</div><div class="stat-sub">per day</div></div>
+      <div class="stat-card orange"><div class="stat-icon">📊</div><div class="stat-label">Avg Needed</div><div class="stat-value" id="tr-need">—</div><div class="stat-sub">Trans ÷ 2.2</div></div>
+      <div class="stat-card red"><div class="stat-icon">📈</div><div class="stat-label">Avg Variance</div><div class="stat-value" id="tr-var">—</div><div class="stat-sub">Actual − Needed</div></div>
+      <div class="stat-card purple"><div class="stat-icon">👤</div><div class="stat-label">Avg FTE Var</div><div class="stat-value" id="tr-fte">—</div><div class="stat-sub">÷ 7.5</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div class="card"><div class="card-header"><div class="card-title">Actual Driver Hours</div><span class="card-badge" id="tr-lbl">—</span></div><div class="chart-wrap" style="height:240px"><canvas id="c-trend"></canvas></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">Needed vs Actual</div></div><div class="chart-wrap" style="height:240px"><canvas id="c-need"></canvas></div></div>
+    </div>
+    <div class="card"><div class="card-header"><div class="card-title">FTE Over/Under</div><span class="card-badge" id="tr-fte-lbl">Variance ÷ 7.5</span></div><div class="chart-wrap" style="height:200px"><canvas id="c-fte"></canvas></div></div>
+    <div class="card"><div class="card-header"><div class="card-title">Monthly Summary</div></div><div class="table-wrap"><table class="table"><thead><tr><th>Month</th><th>Days</th><th>Avg Actual</th><th>Avg Needed</th><th>Avg Variance</th><th>Avg FTE</th><th>Peak Day</th></tr></thead><tbody id="tr-tb"></tbody></table></div></div>
+  </div>
+
+  <div class="panel" id="panel-compare" role="tabpanel">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <span style="font-size:13px;font-weight:600;color:var(--text-tertiary)">Mode:</span>
+      <div class="segmented" id="cmp-mode">
+        <span class="segmented-item active" data-mode="weekvweek">Week vs Week</span>
+        <span class="segmented-item" data-mode="dow">Day of Week</span>
+      </div>
+    </div>
+    <div id="cmp-weekvweek">
+      <div class="cmp-grid" id="cmp-ww-cards">
+        <div class="cmp-card"><div class="cmp-header"><div class="cmp-dot" style="background:var(--blue)"></div><div class="cmp-title">This Week</div><div class="cmp-k" id="ww-a-range">—</div></div><div id="ww-a-stats"></div></div>
+        <div class="cmp-card"><div class="cmp-header"><div class="cmp-dot" style="background:var(--orange)"></div><div class="cmp-title">Last Week</div><div class="cmp-k" id="ww-b-range">—</div></div><div id="ww-b-stats"></div></div>
+      </div>
+      <div class="card"><div class="card-header"><div class="card-title">Comparison</div></div><div id="ww-diff-rows"></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">Daily Hours — This vs Last Week</div></div><div class="chart-wrap" style="height:240px"><canvas id="c-ww"></canvas></div></div>
+    </div>
+    <div id="cmp-dow" style="display:none">
+      <div class="card"><div class="card-header"><div class="card-title">By Day of Week</div><span class="card-badge" id="dow-range-lbl">—</span></div><div class="dow-grid" id="dow-cards"></div><div class="chart-wrap" style="height:240px;margin-top:16px"><canvas id="c-dow"></canvas></div><div class="table-wrap" style="margin-top:16px"><table class="table"><thead><tr><th>Day</th><th>Days</th><th>Avg Hrs</th><th>Avg Needed</th><th>Variance</th><th>FTE Var</th><th>Rent</th><th>Returns</th></tr></thead><tbody id="dow-table"></tbody></table></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

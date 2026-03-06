@@ -1,0 +1,16 @@
+{
+  "name": "abm-rental-operations-dashboard",
+  "version": "1.0.0",
+  "description": "A static dashboard for ABM fleet/rental operations with Excel import, charts, and staffing trends.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
