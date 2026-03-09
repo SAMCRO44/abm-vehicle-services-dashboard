@@ -43,12 +43,28 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 24px;
+      padding: 10px 20px;
       background: rgba(15,15,18,.9);
       border-bottom: 1px solid var(--border);
       backdrop-filter: blur(12px);
     }
-    .logo { font-weight: 700; font-size: 17px; letter-spacing: -.02em; }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-logo {
+      height: 28px;
+      width: auto;
+      display: block;
+      filter: drop-shadow(0 0 6px rgba(0,0,0,.6));
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .logo { font-weight: 700; font-size: 15px; letter-spacing: -.03em; }
     .header-meta { font-size: 13px; color: var(--text-muted); }
     .import-wrap {
       display: flex;
@@ -169,9 +185,16 @@
 </head>
 <body>
   <header class="header">
-    <div>
-      <span class="logo">ABM Rental Operations</span>
-      <span class="header-meta" id="header-meta">Import Excel to begin</span>
+    <div class="brand">
+      <img
+        src="https://upload.wikimedia.org/wikipedia/commons/2/22/ABM_Industries_logo_2018.svg"
+        alt="ABM Industries"
+        class="brand-logo"
+      >
+      <div class="brand-text">
+        <span class="logo">Rental Operations Dashboard</span>
+        <span class="header-meta" id="header-meta">Import Excel to begin</span>
+      </div>
     </div>
     <div class="import-wrap">
       <label class="btn btn-primary" for="file-input">
