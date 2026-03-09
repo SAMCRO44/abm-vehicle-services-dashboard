@@ -10,6 +10,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "@upstash/redis": "^1.31.0"
+  },
   "devDependencies": {
     "xlsx": "^0.18.5"
   }

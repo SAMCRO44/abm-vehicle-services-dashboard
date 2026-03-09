@@ -29,3 +29,18 @@ npx vercel
 ```
 
 Or connect the repo at [vercel.com](https://vercel.com) → New Project → Import.
+
+### Redis persistence (Upstash)
+
+Imported data is cached in [Upstash Redis](https://upstash.com) and persists across sessions. Configure these environment variables in your Vercel project:
+
+| Variable | Description |
+|----------|-------------|
+| `UPSTASH_REDIS_REST_URL` | Upstash REST API URL (or `KV_REST_API_URL`) |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash REST token (or `KV_REST_API_TOKEN`) |
+
+1. Create an Upstash Redis database at [console.upstash.com](https://console.upstash.com)
+2. In Vercel: Project → Settings → Environment Variables → Add each variable
+3. Redeploy
+
+Without these variables, the API will return 500 for data load/save; the dashboard will still work locally with in-memory state only.

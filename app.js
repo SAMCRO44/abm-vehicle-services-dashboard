@@ -26,6 +26,9 @@
 
   var FILTER = { startKey: null, endKey: null };
 
+  var API_BASE = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : '';
   var charts = {};
   var PALETTE = ['#1d4ed8', '#15803d', '#4b5563', '#4f46e5', '#b91c1c', '#0f766e', '#ea580c', '#0369a1'];
 
@@ -719,26 +722,108 @@
     state.payrollRows = [];
     state.payrollSummary = null;
     state.payrollByEmployee = [];
+    state.namesIds = {};
     state.sourceFiles = [];
     state._aggregate = null;
   }
 
+  function reviveDates(data) {
+    if (!data || !data.rawMoves) return data;
+    data.rawMoves.forEach(function (m) {
+      if (m.startDate && typeof m.startDate === 'string') {
+        m.startDate = new Date(m.startDate);
+        if (isNaN(m.startDate.getTime())) m.startDate = null;
+      }
+    });
+    return data;
+  }
+
+  function payloadForSave() {
+    return {
+      rawMoves: state.rawMoves,
+      taskTypes: state.taskTypes,
+      startLocations: state.startLocations,
+      endLocations: state.endLocations,
+      payrollRows: state.payrollRows,
+      scans: state.scans,
+      subMinPivot: state.subMinPivot,
+      namesIds: state.namesIds,
+      sourceFiles: state.sourceFiles,
+      filter: { startKey: FILTER.startKey, endKey: FILTER.endKey }
+    };
+  }
+
+  function restoreFromPayload(payload) {
+    if (!payload) return;
+    state.rawMoves = payload.rawMoves || [];
+    state.taskTypes = payload.taskTypes || [];
+    state.startLocations = payload.startLocations || [];
+    state.endLocations = payload.endLocations || [];
+    state.payrollRows = payload.payrollRows || [];
+    state.scans = payload.scans || [];
+    state.subMinPivot = payload.subMinPivot || [];
+    state.namesIds = payload.namesIds || {};
+    state.sourceFiles = payload.sourceFiles || [];
+    if (payload.filter) {
+      FILTER.startKey = payload.filter.startKey || null;
+      FILTER.endKey = payload.filter.endKey || null;
+    }
+  }
+
+  function runPipeline() {
+    mergeTaskTypes();
+    state.startLocations = mergeLocations(state.startLocations, 'location');
+    state.endLocations = mergeLocations(state.endLocations, 'location');
+    aggregateFromRaw();
+    deriveLowPerformers();
+    derivePayroll();
+  }
+
+  function saveToServer(cb) {
+    var url = API_BASE + '/api/data';
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloadForSave())
+    }).then(function (res) {
+      if (res.ok && typeof cb === 'function') cb();
+    }).catch(function () {
+      if (typeof cb === 'function') cb();
+    });
+  }
+
+  function loadFromServer() {
+    var url = API_BASE + '/api/data';
+    fetch(url).then(function (res) {
+      if (!res.ok) return;
+      return res.json();
+    }).then(function (data) {
+      if (!data || (!data.rawMoves && !data.sourceFiles && !data.payrollRows && !data.scans)) return;
+      reviveDates(data);
+      restoreFromPayload(data);
+      var fs = document.getElementById('filter-start');
+      var fe = document.getElementById('filter-end');
+      if (fs && FILTER.startKey) fs.value = FILTER.startKey;
+      if (fe && FILTER.endKey) fe.value = FILTER.endKey;
+      runPipeline();
+      render();
+      var total = (state.rawMoves.length || 0) + (state.payrollRows.length || 0) + (state.scans.length || 0);
+      if (total > 0) toast('Loaded cached data: ' + (state.rawMoves.length || 0) + ' moves, ' + (state.sourceFiles.length || 0) + ' file(s).', 'ok');
+    }).catch(function () {});
+  }
+
   function onFiles(files) {
     if (!files || !files.length) return;
-    resetState();
     var read = 0;
     var total = files.length;
     function done() {
       read++;
       if (read >= total) {
-        mergeTaskTypes();
-        state.startLocations = mergeLocations(state.startLocations, 'location');
-        state.endLocations = mergeLocations(state.endLocations, 'location');
-        aggregateFromRaw();
-        deriveLowPerformers();
-        derivePayroll();
+        runPipeline();
         render();
-        toast('Imported ' + total + ' file(s). ' + state.rawMoves.length + ' moves loaded.', 'ok');
+        saveToServer(function () {
+          toast('Imported ' + total + ' file(s). ' + state.rawMoves.length + ' moves loaded. Data saved.', 'ok');
+        });
       }
     }
     for (var i = 0; i < files.length; i++) {
@@ -779,10 +864,9 @@
     var e = document.getElementById('filter-end');
     FILTER.startKey = s && s.value ? s.value : null;
     FILTER.endKey = e && e.value ? e.value : null;
-    aggregateFromRaw();
-    deriveLowPerformers();
-    derivePayroll();
+    runPipeline();
     render();
+    saveToServer();
   }
 
   var fs = document.getElementById('filter-start');
@@ -797,6 +881,28 @@
     FILTER.endKey = null;
     updateFilterFromInputs();
   });
+
+  var clearBtn = document.getElementById('clear-data');
+  if (clearBtn) clearBtn.addEventListener('click', function () {
+    resetState();
+    FILTER.startKey = null;
+    FILTER.endKey = null;
+    var s = document.getElementById('filter-start');
+    var e = document.getElementById('filter-end');
+    if (s) s.value = '';
+    if (e) e.value = '';
+    fetch(API_BASE + '/api/data', { method: 'DELETE' }).then(function () {
+      runPipeline();
+      render();
+      toast('All data cleared.', 'ok');
+    }).catch(function () {
+      runPipeline();
+      render();
+      toast('Data cleared locally.', 'ok');
+    });
+  });
+
+  loadFromServer();
 
   if (typeof window.toast === 'undefined') window.toast = toast;
 })();
