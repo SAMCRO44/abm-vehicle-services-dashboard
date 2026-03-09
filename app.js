@@ -21,7 +21,8 @@
     payrollSummary: null,
     payrollByEmployee: [],
     namesIds: {},
-    sourceFiles: []
+    sourceFiles: [],
+    fileHashes: []
   };
 
   var FILTER = { startKey: null, endKey: null };
@@ -66,7 +67,20 @@
     return d && d.toISOString ? d.toISOString().slice(0, 10) : null;
   }
 
-  function addFieldOpsRows(sheet, firstRowIsHeader) {
+  function parseDateFromString(str) {
+    if (!str || typeof str !== 'string') return null;
+    var m = str.match(/(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})\b/);
+    if (!m) return null;
+    var a = parseInt(m[1], 10), b = parseInt(m[2], 10), c = parseInt(m[3], 10);
+    var yr = c < 100 ? 2000 + c : c;
+    var mo, day;
+    if (a > 12) { day = a; mo = b; } else if (b > 12) { mo = a; day = b; } else { mo = a; day = b; }
+    if (mo < 1 || mo > 12 || day < 1 || day > 31) return null;
+    var d = new Date(yr, mo - 1, day);
+    return isNaN(d.getTime()) ? null : dateKey(d);
+  }
+
+  function addFieldOpsRows(sheet, firstRowIsHeader, sheetDateKey) {
     var data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
     var headers = (data[0] || []).map(function (h) { return (h || '').trim(); });
     var start = firstRowIsHeader ? 1 : 0;
@@ -86,6 +100,8 @@
       var blocked = col(obj, ['Is Blocked By Foundry']);
       if (blocked === true || blocked === 'true' || blocked === 'TRUE' || blocked === 1) blocked = true; else blocked = false;
       if (!taskType && !name && !startLoc) continue;
+      var startDate = parseTimestamp(startTs);
+      if (!startDate && sheetDateKey) startDate = new Date(sheetDateKey + 'T12:00:00');
       state.rawMoves.push({
         taskType: taskType || '',
         name: (name || '').trim(),
@@ -94,7 +110,7 @@
         endLocation: (endLoc || '').trim(),
         durationSecs: dur,
         startTimestamp: startTs,
-        startDate: parseTimestamp(startTs),
+        startDate: startDate,
         blocked: !!blocked
       });
     }
@@ -175,7 +191,7 @@
     }
   }
 
-  function addSubMinPivot(sheet) {
+  function addSubMinPivot(sheet, sheetDateKey) {
     var data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
     var h = (data[0] || []).map(function (x) { return (x || '').trim(); });
     var labelCol = h.indexOf('Row Labels');
@@ -186,11 +202,11 @@
       var row = data[r];
       var label = (row[labelCol] ?? '').toString().trim();
       var count = parseNum(row[countCol]);
-      if (label && /^[\d,]|^[A-Za-z]/.test(label)) state.subMinPivot.push({ name: label, count: count || 0 });
+      if (label && /^[\d,]|^[A-Za-z]/.test(label)) state.subMinPivot.push({ name: label, count: count || 0, dateKey: sheetDateKey || null });
     }
   }
 
-  function addScans(sheet) {
+  function addScans(sheet, sheetDateKey) {
     var data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
     var h = (data[0] || []).map(function (x) { return (x || '').trim(); });
     var nameCol = h.indexOf('Completed by Name');
@@ -204,12 +220,13 @@
       state.scans.push({
         name: name,
         count: parseNum(row[countCol]) || 0,
-        avgSecs: parseNum(row[avgCol])
+        avgSecs: parseNum(row[avgCol]),
+        dateKey: sheetDateKey || null
       });
     }
   }
 
-  function addPayrollHours(sheet) {
+  function addPayrollHours(sheet, sheetDateKey) {
     var data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
     var h = (data[0] || []).map(function (x) { return (x || '').trim(); });
     var empCol = h.indexOf('Employee');
@@ -237,6 +254,7 @@
         }
         if (!isNaN(tiDate.getTime())) dKey = dateKey(tiDate);
       }
+      if (!dKey && sheetDateKey) dKey = sheetDateKey;
       state.payrollRows.push({
         employee: empName,
         rateType: rate,
@@ -248,16 +266,18 @@
 
   function processWorkbook(wb, fileName) {
     state.sourceFiles.push(fileName);
+    var fileDateKey = parseDateFromString(fileName);
     for (var i = 0; i < wb.SheetNames.length; i++) {
       var name = wb.SheetNames[i];
       var lname = name.toLowerCase().trim();
       var sheet = wb.Sheets[name];
+      var sheetDateKey = parseDateFromString(name) || fileDateKey;
       var data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
       var firstRow = data[0] || [];
       var headers = firstRow.map(function (x) { return (x || '').trim(); });
 
       // Field Ops raw moves (central to everything)
-      if (lname === 'field ops task') addFieldOpsRows(sheet, true);
+      if (lname === 'field ops task') addFieldOpsRows(sheet, true, sheetDateKey);
 
       // Alternate <1 Minute DATA sheet (same columns as Field Ops Task)
       if (lname === '<1 minute data') {
@@ -289,6 +309,8 @@
           var bl = col(o, ['Is Blocked By Foundry']);
           bl = bl === true || bl === 'true' || bl === 'TRUE' || bl === 1;
           if (!tt && !n && !startL) continue;
+          var startDate = parseTimestamp(st);
+          if (!startDate && sheetDateKey) startDate = new Date(sheetDateKey + 'T12:00:00');
           state.rawMoves.push({
             taskType: tt || '',
             name: n,
@@ -297,7 +319,7 @@
             endLocation: endL,
             durationSecs: d,
             startTimestamp: st,
-            startDate: parseTimestamp(st),
+            startDate: startDate,
             blocked: !!bl
           });
         }
@@ -313,16 +335,16 @@
       if (lname === 'names-ids' || (headers[0] === 'ID' && headers[1] === 'Name')) addNamesIds(sheet);
 
       // Sub-minute summary pivot
-      if (lname.indexOf('<1 minute pivot') === 0) addSubMinPivot(sheet);
+      if (lname.indexOf('<1 minute pivot') === 0) addSubMinPivot(sheet, sheetDateKey);
 
       // Scans summary sheets like "Scans 3.5.26" (any date suffix)
-      if (lname.indexOf('scans') === 0) addScans(sheet);
+      if (lname.indexOf('scans') === 0) addScans(sheet, sheetDateKey);
 
       // Payroll / hours sheets (e.g. Hours 3.5.26 or DetailedHoursReport)
       var hasEmployee = headers.indexOf('Employee') !== -1;
       var hasRateType = headers.indexOf('Rate Type') !== -1;
       var hasHours = headers.indexOf('Hours') !== -1;
-      if (hasEmployee && hasRateType && hasHours) addPayrollHours(sheet);
+      if (hasEmployee && hasRateType && hasHours) addPayrollHours(sheet, sheetDateKey);
     }
   }
 
@@ -527,7 +549,18 @@
       state.lowPerformers = [];
       return;
     }
-    var enriched = state.scans
+    var hasFilter = !!(FILTER.startKey || FILTER.endKey);
+    var scans = state.scans;
+    if (hasFilter) {
+      scans = scans.filter(function (s) {
+        var dk = s.dateKey;
+        if (!dk) return true;
+        if (FILTER.startKey && dk < FILTER.startKey) return false;
+        if (FILTER.endKey && dk > FILTER.endKey) return false;
+        return true;
+      });
+    }
+    var enriched = scans
       .map(function (s) {
         var avgSecs = s.avgSecs != null && !isNaN(s.avgSecs) && s.avgSecs > 0 ? s.avgSecs : null;
         var scansPerHour = avgSecs ? 3600 / avgSecs : null;
@@ -724,7 +757,17 @@
     state.payrollByEmployee = [];
     state.namesIds = {};
     state.sourceFiles = [];
+    state.fileHashes = [];
     state._aggregate = null;
+  }
+
+  function hashFileBuffer(buf) {
+    var h = 5381;
+    var arr = new Uint8Array(buf);
+    for (var i = 0; i < arr.length; i++) {
+      h = ((h << 5) + h) ^ arr[i];
+    }
+    return (h >>> 0).toString(36);
   }
 
   function reviveDates(data) {
@@ -749,6 +792,7 @@
       subMinPivot: state.subMinPivot,
       namesIds: state.namesIds,
       sourceFiles: state.sourceFiles,
+      fileHashes: state.fileHashes,
       filter: { startKey: FILTER.startKey, endKey: FILTER.endKey }
     };
   }
@@ -764,10 +808,40 @@
     state.subMinPivot = payload.subMinPivot || [];
     state.namesIds = payload.namesIds || {};
     state.sourceFiles = payload.sourceFiles || [];
+    state.fileHashes = payload.fileHashes || [];
     if (payload.filter) {
       FILTER.startKey = payload.filter.startKey || null;
       FILTER.endKey = payload.filter.endKey || null;
     }
+  }
+
+  function getDataDateRange() {
+    var min = null, max = null;
+    state.rawMoves.forEach(function (m) {
+      var dk = m.startDate ? dateKey(m.startDate) : null;
+      if (dk) { if (!min || dk < min) min = dk; if (!max || dk > max) max = dk; }
+    });
+    state.payrollRows.forEach(function (r) {
+      var dk = r.dateKey;
+      if (dk) { if (!min || dk < min) min = dk; if (!max || dk > max) max = dk; }
+    });
+    state.scans.forEach(function (s) {
+      var dk = s.dateKey;
+      if (dk) { if (!min || dk < min) min = dk; if (!max || dk > max) max = dk; }
+    });
+    return { min: min, max: max };
+  }
+
+  function maybeAutoSetFilter() {
+    if (FILTER.startKey || FILTER.endKey) return;
+    var range = getDataDateRange();
+    if (!range.min || !range.max) return;
+    FILTER.startKey = range.min;
+    FILTER.endKey = range.max;
+    var fs = document.getElementById('filter-start');
+    var fe = document.getElementById('filter-end');
+    if (fs) fs.value = range.min;
+    if (fe) fe.value = range.max;
   }
 
   function runPipeline() {
@@ -805,6 +879,7 @@
       var fe = document.getElementById('filter-end');
       if (fs && FILTER.startKey) fs.value = FILTER.startKey;
       if (fe && FILTER.endKey) fe.value = FILTER.endKey;
+      if (!FILTER.startKey && !FILTER.endKey) maybeAutoSetFilter();
       runPipeline();
       render();
       var total = (state.rawMoves.length || 0) + (state.payrollRows.length || 0) + (state.scans.length || 0);
@@ -816,13 +891,19 @@
     if (!files || !files.length) return;
     var read = 0;
     var total = files.length;
+    var skipped = 0;
     function done() {
       read++;
       if (read >= total) {
         runPipeline();
+        maybeAutoSetFilter();
+        runPipeline();
         render();
         saveToServer(function () {
-          toast('Imported ' + total + ' file(s). ' + state.rawMoves.length + ' moves loaded. Data saved.', 'ok');
+          var msg = 'Imported ' + (total - skipped) + ' file(s)';
+          if (skipped) msg += ' (' + skipped + ' skipped, already imported)';
+          msg += '. ' + state.rawMoves.length + ' moves loaded. Data saved.';
+          toast(msg, 'ok');
         });
       }
     }
@@ -831,7 +912,15 @@
         var r = new FileReader();
         r.onload = function (e) {
           try {
-            var wb = XLSX.read(e.target.result, { type: 'array' });
+            var buf = e.target.result;
+            var hash = hashFileBuffer(buf);
+            if (state.fileHashes.indexOf(hash) !== -1) {
+              skipped++;
+              done();
+              return;
+            }
+            state.fileHashes.push(hash);
+            var wb = XLSX.read(buf, { type: 'array' });
             processWorkbook(wb, file.name);
           } catch (err) {
             toast('Error reading ' + file.name + ': ' + err.message, 'err');
