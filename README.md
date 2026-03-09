@@ -1,55 +1,31 @@
 # ABM Rental Operations Dashboard
 
-A static dashboard for ABM fleet/rental operations with Excel import, charts, and staffing trends.
+Dashboard for ABM fleet/rental operations. Import one or more Excel exports to view moves, task types, locations, workers, and performance.
 
-## Deploy to Vercel
-
-1. Install Vercel CLI (if needed): `npm i -g vercel`
-2. From this folder, run: `vercel`
-3. Follow the prompts to create a new project named "abm-rental-operations-dashboard"
-
-Or connect this folder to Vercel via [vercel.com](https://vercel.com) → New Project → Import.
-
-## Local
-
-Open `index.html` in a browser, or serve with:
+## Run locally
 
 ```bash
-npx serve .
+npm run dev
 ```
 
-Then visit http://localhost:3000
+Then open http://localhost:3000 and use **Import Excel** to load your files.
 
-## Features
+## Supported Excel files
 
-- **Overview**: Moves, workers, hourly activity, task mix, top workers
-- **Workers**: Sortable table with volume, speed, sub-min, gap
-- **Task Types**: Avg time by type, full breakdown
-- **Locations**: Start/end locations, worker × destination matrix
-- **Hours & Pay**: Payroll summary, hours distribution
-- **Performance**: Sub-min moves, gap stats, scans heatmap
-- **Staffing Trends**: Actual vs needed hours, FTE variance, monthly summary
-- **Compare**: Week-over-week and day-of-week patterns
-- **Date Filter**: Presets (Today, Week, Month) + custom range
-- **Import**: Drag-and-drop or click to import `.xlsx` / `.xls` files
+- **Field Ops Task** — Raw move data (Status, Task Type, Name, ID, Start/End Location, timestamps, Duration Taken Seconds, Is Blocked By Foundry). Used for overview, workers, and locations.
+- **Pivot Table** — Task type summary (Task Type Description, Count, avg/slowest/fastest times), or Start/End Location Title + Count.
+- **Summary** — Same shape as task-type Pivot (task type, count, times).
+- **Names-IDs** — ID → Name mapping for workers.
+- **&lt;1 Minute Pivot** — Sub-minute move counts per worker (Row Labels, Count of End Location).
+- **&lt;1 Minute DATA** — Detailed sub-minute moves (same columns as Field Ops Task).
+- **Scans 3.5.26** — Completed by Name, COUNT, Average Time (secs).
 
-## Supported Data Files
+You can upload multiple files at once; data is merged (e.g. all Field Ops Task rows combined, task types and locations merged by name).
 
-- **Field Ops Task** (full or Export format) — Workers, task types, locations, hourly activity, gaps
-- **Summary** — Task type breakdown with avg/slowest/fastest
-- **Scans 2.7.26** — Worker stats (completed by name, count, avg time)
-- **<1 Minute Pivot** — Sub-minute move counts per worker
-- **Pivot** — Worker × destination matrix
-- **Names-IDs** — ID to name mapping
-- **Hours 2.7.26** / Payroll — Rate type and hours (Reg, OT, Lunch, PTO)
-- **HoursOverview** — Monthly sheets (May 2025, FEB 2026, etc.) or Sheet1 with Actual Driver Hours
-- **Scans per hour** — Worker × date heatmap
+## Deploy (Vercel)
 
-Upload any combination of these files; data is merged automatically.
+```bash
+npx vercel
+```
 
-## Future Development
-
-- **Location**: `C:\Users\luiss\ABM-Rental-Operations-Dashboard`
-- **Live**: https://abm-rental-operations-dashboard.vercel.app
-- **Stack**: Static HTML/CSS/JS, Chart.js, SheetJS (XLSX)
-- **Deploy**: `vercel --prod --yes`
+Or connect the repo at [vercel.com](https://vercel.com) → New Project → Import.
