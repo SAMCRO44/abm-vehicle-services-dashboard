@@ -16,12 +16,18 @@
     workers: [],
     subMinPivot: [],
     scans: [],
+    lowPerformers: [],
+    payrollRows: [],
+    payrollSummary: null,
+    payrollByEmployee: [],
     namesIds: {},
     sourceFiles: []
   };
 
+  var FILTER = { startKey: null, endKey: null };
+
   var charts = {};
-  var PALETTE = ['#22d3ee', '#4ade80', '#fb923c', '#a78bfa', '#f87171', '#e879f9', '#2dd4bf', '#fbbf24'];
+  var PALETTE = ['#1d4ed8', '#15803d', '#4b5563', '#4f46e5', '#b91c1c', '#0f766e', '#ea580c', '#0369a1'];
 
   function trimKeys(row) {
     var out = {};
@@ -51,6 +57,10 @@
     if (typeof ts === 'number' && ts > 100000) return new Date((ts - 25569) * 86400 * 1000);
     var d = new Date(ts);
     return isNaN(d.getTime()) ? null : d;
+  }
+
+  function dateKey(d) {
+    return d && d.toISOString ? d.toISOString().slice(0, 10) : null;
   }
 
   function addFieldOpsRows(sheet, firstRowIsHeader) {
@@ -196,17 +206,58 @@
     }
   }
 
+  function addPayrollHours(sheet) {
+    var data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    var h = (data[0] || []).map(function (x) { return (x || '').trim(); });
+    var empCol = h.indexOf('Employee');
+    var rateCol = h.indexOf('Rate Type');
+    var hoursCol = h.indexOf('Hours');
+    var timeInCol = h.indexOf('Time In');
+    if (empCol < 0 || rateCol < 0 || hoursCol < 0) return;
+    for (var r = 1; r < data.length; r++) {
+      var row = data[r];
+      if (!row || !row.length) continue;
+      var rawEmp = row[empCol];
+      var empName = (rawEmp || '').toString().trim();
+      if (!empName) continue;
+      var rate = (row[rateCol] || '').toString().trim();
+      var hrs = parseNum(row[hoursCol]);
+      if (!hrs) continue;
+      var dKey = null;
+      if (timeInCol >= 0) {
+        var ti = row[timeInCol];
+        var tiDate;
+        if (typeof ti === 'number') {
+          tiDate = new Date((ti - 25569) * 86400 * 1000);
+        } else {
+          tiDate = new Date(ti);
+        }
+        if (!isNaN(tiDate.getTime())) dKey = dateKey(tiDate);
+      }
+      state.payrollRows.push({
+        employee: empName,
+        rateType: rate,
+        hours: hrs,
+        dateKey: dKey
+      });
+    }
+  }
+
   function processWorkbook(wb, fileName) {
     state.sourceFiles.push(fileName);
     for (var i = 0; i < wb.SheetNames.length; i++) {
       var name = wb.SheetNames[i];
+      var lname = name.toLowerCase().trim();
       var sheet = wb.Sheets[name];
       var data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
       var firstRow = data[0] || [];
       var headers = firstRow.map(function (x) { return (x || '').trim(); });
 
-      if (name === 'Field Ops Task') addFieldOpsRows(sheet, true);
-      if (name === '<1 Minute DATA') {
+      // Field Ops raw moves (central to everything)
+      if (lname === 'field ops task') addFieldOpsRows(sheet, true);
+
+      // Alternate <1 Minute DATA sheet (same columns as Field Ops Task)
+      if (lname === '<1 minute data') {
         var h = headers;
         var obj = {};
         for (var c = 0; c < h.length; c++) if (h[c]) obj[h[c]] = (data[1] || [])[c];
@@ -248,11 +299,27 @@
           });
         }
       }
-      if (name === 'Pivot Table') addPivotTable(sheet, headers);
-      if (name === 'Summary') addSummary(sheet);
-      if (name === 'Names-IDs') addNamesIds(sheet);
-      if (name === '<1 Minute Pivot') addSubMinPivot(sheet);
-      if (name.indexOf('Scans') === 0 && name.indexOf('3.5') !== -1) addScans(sheet);
+
+      // Generic pivot tables: task types or locations
+      if (lname === 'pivot table') addPivotTable(sheet, headers);
+
+      // Task-type summary (same as Pivot but pre-aggregated)
+      if (lname === 'summary') addSummary(sheet);
+
+      // Names-IDs mapping
+      if (lname === 'names-ids' || (headers[0] === 'ID' && headers[1] === 'Name')) addNamesIds(sheet);
+
+      // Sub-minute summary pivot
+      if (lname.indexOf('<1 minute pivot') === 0) addSubMinPivot(sheet);
+
+      // Scans summary sheets like "Scans 3.5.26" (any date suffix)
+      if (lname.indexOf('scans') === 0) addScans(sheet);
+
+      // Payroll / hours sheets (e.g. Hours 3.5.26 or DetailedHoursReport)
+      var hasEmployee = headers.indexOf('Employee') !== -1;
+      var hasRateType = headers.indexOf('Rate Type') !== -1;
+      var hasHours = headers.indexOf('Hours') !== -1;
+      if (hasEmployee && hasRateType && hasHours) addPayrollHours(sheet);
     }
   }
 
@@ -270,16 +337,27 @@
     var blockedCount = 0;
     var subMinCount = 0;
 
+    var hasFilter = !!(FILTER.startKey || FILTER.endKey);
+
     for (var i = 0; i < moves.length; i++) {
       var m = moves[i];
+      if (hasFilter) {
+        var dk = m.startDate ? dateKey(m.startDate) : null;
+        if (!dk) continue;
+        if (FILTER.startKey && dk < FILTER.startKey) continue;
+        if (FILTER.endKey && dk > FILTER.endKey) continue;
+      }
       var name = m.name || state.namesIds[m.id] || m.id || 'Unknown';
-      if (!byWorker[name]) byWorker[name] = { name: name, count: 0, totalSecs: 0, fastest: null, slowest: null, subMin: 0 };
+      if (!byWorker[name]) byWorker[name] = { name: name, count: 0, totalSecs: 0, fastest: null, slowest: null, subMin: 0, subMinSecs: 0 };
       byWorker[name].count++;
       if (m.durationSecs != null) {
         byWorker[name].totalSecs += m.durationSecs;
         if (byWorker[name].fastest == null || m.durationSecs < byWorker[name].fastest) byWorker[name].fastest = m.durationSecs;
         if (byWorker[name].slowest == null || m.durationSecs > byWorker[name].slowest) byWorker[name].slowest = m.durationSecs;
-        if (m.durationSecs < 60) byWorker[name].subMin++;
+        if (m.durationSecs < 60) {
+          byWorker[name].subMin++;
+          byWorker[name].subMinSecs += m.durationSecs;
+        }
       }
       totalDur += m.durationSecs || 0;
       if (m.durationSecs != null) countDur++;
@@ -306,16 +384,15 @@
       }
     }
 
-    if (!state.taskTypes.length) {
-      for (var t in byTask) state.taskTypes.push({
-        type: byTask[t].type,
-        count: byTask[t].count,
-        avgSecs: byTask[t].totalSecs / byTask[t].count,
-        avgMins: (byTask[t].totalSecs / byTask[t].count) / 60,
-        fastestSecs: byTask[t].fastest,
-        slowestSecs: byTask[t].slowest
-      });
-    }
+    state.taskTypes = [];
+    for (var t in byTask) state.taskTypes.push({
+      type: byTask[t].type,
+      count: byTask[t].count,
+      avgSecs: byTask[t].count ? byTask[t].totalSecs / byTask[t].count : null,
+      avgMins: byTask[t].count ? (byTask[t].totalSecs / byTask[t].count) / 60 : null,
+      fastestSecs: byTask[t].fastest,
+      slowestSecs: byTask[t].slowest
+    });
     if (!state.startLocations.length) {
       for (var s in byStart) state.startLocations.push({ location: s, count: byStart[s] });
       state.startLocations.sort(function (a, b) { return b.count - a.count; });
@@ -328,13 +405,16 @@
     state.workers = [];
     for (var w in byWorker) {
       var x = byWorker[w];
+      var subCount = x.subMin || 0;
       state.workers.push({
         name: x.name,
         count: x.count,
         avgSecs: x.count ? x.totalSecs / x.count : null,
         fastestSecs: x.fastest,
         slowestSecs: x.slowest,
-        subMinCount: x.subMin || 0
+        subMinCount: subCount,
+        subMinAvgSecs: subCount ? x.subMinSecs / subCount : null,
+        subMinShare: x.count ? subCount / x.count : null
       });
     }
     state.workers.sort(function (a, b) { return b.count - a.count; });
@@ -385,6 +465,87 @@
     for (var k in byKey) out.push(key === 'location' ? { location: k, count: byKey[k] } : { [key]: k, count: byKey[k] });
     out.sort(function (a, b) { return b.count - a.count; });
     return out;
+  }
+
+  function derivePayroll() {
+    if (!state.payrollRows.length) {
+      state.payrollSummary = null;
+      state.payrollByEmployee = [];
+      return;
+    }
+    var totals = { reg: 0, ot: 0, lunch: 0, pto: 0, other: 0 };
+    var byEmp = {};
+
+    function normRate(rt) {
+      var s = (rt || '').toString().toLowerCase();
+      if (s.indexOf('reg') !== -1) return 'reg';
+      if (s.indexOf('ot') !== -1 || s.indexOf('overtime') !== -1) return 'ot';
+      if (s.indexOf('lunch') !== -1 || s.indexOf('meal') !== -1) return 'lunch';
+      if (s.indexOf('pto') !== -1 || s.indexOf('vac') !== -1) return 'pto';
+      return 'other';
+    }
+
+    var hasFilter = !!(FILTER.startKey || FILTER.endKey);
+
+    state.payrollRows.forEach(function (row) {
+      if (hasFilter) {
+        if (!row.dateKey) return;
+        if (FILTER.startKey && row.dateKey < FILTER.startKey) return;
+        if (FILTER.endKey && row.dateKey > FILTER.endKey) return;
+      }
+      var rateKey = normRate(row.rateType);
+      var hrs = row.hours || 0;
+      totals[rateKey] += hrs;
+      var name = row.employee;
+      if (!byEmp[name]) byEmp[name] = { name: name, reg: 0, ot: 0, lunch: 0, pto: 0, other: 0, total: 0 };
+      byEmp[name][rateKey] += hrs;
+      byEmp[name].total += hrs;
+    });
+
+    var employees = Object.keys(byEmp).length;
+    var totalPaid = totals.reg + totals.ot + totals.pto;
+
+    state.payrollSummary = {
+      reg: totals.reg,
+      ot: totals.ot,
+      lunch: totals.lunch,
+      pto: totals.pto,
+      employees: employees,
+      totalPaid: totalPaid
+    };
+
+    state.payrollByEmployee = Object.keys(byEmp).map(function (k) { return byEmp[k]; }).sort(function (a, b) {
+      return b.total - a.total;
+    });
+  }
+
+  function deriveLowPerformers() {
+    if (!state.scans.length) {
+      state.lowPerformers = [];
+      return;
+    }
+    var enriched = state.scans
+      .map(function (s) {
+        var avgSecs = s.avgSecs != null && !isNaN(s.avgSecs) && s.avgSecs > 0 ? s.avgSecs : null;
+        var scansPerHour = avgSecs ? 3600 / avgSecs : null;
+        return {
+          name: s.name,
+          scans: s.count || 0,
+          avgSecs: avgSecs,
+          scansPerHour: scansPerHour
+        };
+      })
+      .filter(function (x) { return x.scansPerHour != null; });
+
+    if (!enriched.length) {
+      state.lowPerformers = [];
+      return;
+    }
+
+    enriched.sort(function (a, b) { return a.scansPerHour - b.scansPerHour; });
+
+    var take = Math.max(5, Math.min(20, Math.round(enriched.length * 0.25)));
+    state.lowPerformers = enriched.slice(0, take);
   }
 
   function fmtSecs(s) {
@@ -441,7 +602,22 @@
     var tbody = document.getElementById('table-tasks');
     if (tbody) {
       tbody.innerHTML = state.taskTypes.map(function (t) {
-        return '<tr><td class="cell-name">' + (t.type || '—') + '</td><td>' + (t.count != null ? t.count.toLocaleString() : '—') + '</td><td>' + (t.avgMins != null ? t.avgMins.toFixed(2) : '—') + '</td><td>' + (t.avgSecs != null ? Math.round(t.avgSecs) : '—') + '</td><td>' + fmtSecs(t.fastestSecs) + '</td><td>' + fmtSecs(t.slowestSecs) + '</td></tr>';
+        var avgMins = t.avgMins != null ? t.avgMins.toFixed(2) : '—';
+        var avgSecs = t.avgSecs != null ? Math.round(t.avgSecs) : '—';
+        var slowMins = t.slowestSecs != null ? (t.slowestSecs / 60).toFixed(2) : '—';
+        var slowSecs = t.slowestSecs != null ? Math.round(t.slowestSecs) : '—';
+        var fastMins = t.fastestSecs != null ? (t.fastestSecs / 60).toFixed(2) : '—';
+        var fastSecs = t.fastestSecs != null ? Math.round(t.fastestSecs) : '—';
+        return '<tr>' +
+          '<td class="cell-name">' + (t.type || '—') + '</td>' +
+          '<td>' + (t.count != null ? t.count.toLocaleString() : '—') + '</td>' +
+          '<td>' + avgMins + '</td>' +
+          '<td>' + avgSecs + '</td>' +
+          '<td>' + slowMins + '</td>' +
+          '<td>' + slowSecs + '</td>' +
+          '<td>' + fastMins + '</td>' +
+          '<td>' + fastSecs + '</td>' +
+          '</tr>';
       }).join('');
     }
 
@@ -463,9 +639,48 @@
 
     var subMinBody = document.getElementById('table-submin');
     if (subMinBody) {
-      var subMin = state.subMinPivot.length ? state.subMinPivot : state.workers.filter(function (w) { return (w.subMinCount || 0) > 0; }).map(function (w) { return { name: w.name, count: w.subMinCount }; }).sort(function (a, b) { return (b.count || 0) - (a.count || 0); });
-      subMinBody.innerHTML = subMin.slice(0, 50).map(function (x) { return '<tr><td class="cell-name">' + (x.name || '—') + '</td><td>' + (x.count != null ? x.count : '—') + '</td></tr>'; }).join('');
+      var rows = state.workers
+        .filter(function (w) { return (w.subMinCount || 0) > 0; })
+        .sort(function (a, b) { return (b.subMinCount || 0) - (a.subMinCount || 0); });
+      subMinBody.innerHTML = rows.slice(0, 100).map(function (w) {
+        var avgSub = w.subMinAvgSecs != null ? w.subMinAvgSecs.toFixed(1) : '—';
+        var pct = w.subMinShare != null ? (w.subMinShare * 100).toFixed(1) + '%' : '—';
+        return '<tr>' +
+          '<td class="cell-name">' + (w.name || '—') + '</td>' +
+          '<td>' + (w.subMinCount || 0) + '</td>' +
+          '<td>' + avgSub + '</td>' +
+          '<td>' + pct + '</td>' +
+          '</tr>';
+      }).join('');
     }
+
+    var lowBody = document.getElementById('table-low-performers');
+    if (lowBody) {
+      lowBody.innerHTML = state.lowPerformers.map(function (lp, idx) {
+        var sph = lp.scansPerHour != null ? lp.scansPerHour.toFixed(2) : '—';
+        return '<tr><td>' + (idx + 1) + '</td><td class="cell-name">' + (lp.name || '—') + '</td><td>' + (lp.scans || 0) + '</td><td>' + fmtSecs(lp.avgSecs) + '</td><td>' + sph + '</td></tr>';
+      }).join('');
+    }
+
+    var paySummary = state.payrollSummary || {};
+    setText('pay-reg', paySummary.reg != null ? paySummary.reg.toFixed(1) : '—');
+    setText('pay-ot', paySummary.ot != null ? paySummary.ot.toFixed(1) : '—');
+    setText('pay-lunch', paySummary.lunch != null ? paySummary.lunch.toFixed(1) : '—');
+    setText('pay-pto', paySummary.pto != null ? paySummary.pto.toFixed(1) : '—');
+    setText('pay-emp', paySummary.employees != null ? paySummary.employees : '—');
+    setText('pay-total', paySummary.totalPaid != null ? paySummary.totalPaid.toFixed(1) : '—');
+
+    var payBody = document.getElementById('table-payroll');
+    if (payBody) {
+      payBody.innerHTML = state.payrollByEmployee.map(function (p, idx) {
+        return '<tr><td>' + (idx + 1) + '</td><td class="cell-name">' + (p.name || '—') + '</td><td>' + p.total.toFixed(2) + '</td><td>' + p.reg.toFixed(2) + '</td><td>' + p.ot.toFixed(2) + '</td><td>' + p.lunch.toFixed(2) + '</td><td>' + p.pto.toFixed(2) + '</td></tr>';
+      }).join('');
+    }
+
+    var info = [];
+    if (FILTER.startKey) info.push('from ' + FILTER.startKey);
+    if (FILTER.endKey) info.push('to ' + FILTER.endKey);
+    setText('filter-info', info.length ? info.join(' ') : 'All dates');
   }
 
   function renderChart(canvasId, type, labels, data, label) {
@@ -500,6 +715,10 @@
     state.workers = [];
     state.subMinPivot = [];
     state.scans = [];
+    state.lowPerformers = [];
+    state.payrollRows = [];
+    state.payrollSummary = null;
+    state.payrollByEmployee = [];
     state.sourceFiles = [];
     state._aggregate = null;
   }
@@ -516,6 +735,8 @@
         state.startLocations = mergeLocations(state.startLocations, 'location');
         state.endLocations = mergeLocations(state.endLocations, 'location');
         aggregateFromRaw();
+        deriveLowPerformers();
+        derivePayroll();
         render();
         toast('Imported ' + total + ' file(s). ' + state.rawMoves.length + ' moves loaded.', 'ok');
       }
@@ -551,6 +772,30 @@
     t.classList.add('active');
     var panel = document.getElementById('panel-' + t.dataset.tab);
     if (panel) panel.classList.add('active');
+  });
+
+  function updateFilterFromInputs() {
+    var s = document.getElementById('filter-start');
+    var e = document.getElementById('filter-end');
+    FILTER.startKey = s && s.value ? s.value : null;
+    FILTER.endKey = e && e.value ? e.value : null;
+    aggregateFromRaw();
+    deriveLowPerformers();
+    derivePayroll();
+    render();
+  }
+
+  var fs = document.getElementById('filter-start');
+  var fe = document.getElementById('filter-end');
+  var fc = document.getElementById('filter-clear');
+  if (fs) fs.addEventListener('change', updateFilterFromInputs);
+  if (fe) fe.addEventListener('change', updateFilterFromInputs);
+  if (fc) fc.addEventListener('click', function () {
+    if (fs) fs.value = '';
+    if (fe) fe.value = '';
+    FILTER.startKey = null;
+    FILTER.endKey = null;
+    updateFilterFromInputs();
   });
 
   if (typeof window.toast === 'undefined') window.toast = toast;

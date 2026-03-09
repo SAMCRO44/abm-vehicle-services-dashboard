@@ -12,19 +12,19 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0f0f12;
-      --bg-card: #18181c;
-      --border: rgba(255,255,255,.08);
-      --text: #f4f4f5;
-      --text-muted: #a1a1aa;
-      --accent: #22d3ee;
-      --accent-dim: rgba(34,211,238,.2);
-      --green: #4ade80;
-      --green-dim: rgba(74,222,128,.2);
-      --orange: #fb923c;
-      --red: #f87171;
-      --red-dim: rgba(248,113,113,.2);
-      --purple: #a78bfa;
+      --bg: #050816;
+      --bg-card: #0b1220;
+      --border: rgba(148,163,184,.35);
+      --text: #e5e7eb;
+      --text-muted: #9ca3af;
+      --accent: #1d4ed8;
+      --accent-dim: rgba(37,99,235,.22);
+      --green: #15803d;
+      --green-dim: rgba(34,197,94,.18);
+      --orange: #ea580c;
+      --red: #b91c1c;
+      --red-dim: rgba(248,113,113,.18);
+      --purple: #4f46e5;
       --radius: 10px;
       --radius-sm: 6px;
     }
@@ -43,10 +43,10 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 20px;
-      background: rgba(15,15,18,.9);
-      border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(12px);
+      padding: 14px 32px;
+      background: linear-gradient(to right, #020617, #020617);
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(18px);
     }
     .brand {
       display: inline-flex;
@@ -54,7 +54,7 @@
       gap: 10px;
     }
     .brand-logo {
-      height: 28px;
+      height: 34px;
       width: auto;
       display: block;
       filter: drop-shadow(0 0 6px rgba(0,0,0,.6));
@@ -64,8 +64,8 @@
       flex-direction: column;
       gap: 2px;
     }
-    .logo { font-weight: 700; font-size: 15px; letter-spacing: -.03em; }
-    .header-meta { font-size: 13px; color: var(--text-muted); }
+    .logo { font-weight: 700; font-size: 20px; letter-spacing: -.04em; }
+    .header-meta { font-size: 13px; color: var(--text-muted); opacity: .9; }
     .import-wrap {
       display: flex;
       align-items: center;
@@ -93,11 +93,12 @@
     #file-input { display: none; }
     .tabs {
       display: flex;
-      gap: 2px;
-      padding: 12px 24px;
+      justify-content: center;
+      gap: 4px;
+      padding: 12px 24px 14px;
       border-bottom: 1px solid var(--border);
       overflow-x: auto;
-      background: var(--bg);
+      background: radial-gradient(circle at top, rgba(0,0,0,.75), #050509);
     }
     .tab {
       padding: 10px 16px;
@@ -181,6 +182,48 @@
     @keyframes slideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
     .source-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
     .source-chip { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--text-muted); }
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 32px;
+      border-bottom: 1px solid var(--border);
+      background: #020617;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .filter-bar input[type="date"] {
+      background: #020617;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .filter-bar input[type="date"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+    .filter-clear {
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 999px;
+    }
+    .filter-clear:hover {
+      background: rgba(148,163,184,.16);
+      color: var(--text);
+    }
+    .filter-info {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
   </style>
 </head>
 <body>
@@ -204,12 +247,22 @@
       <input type="file" id="file-input" accept=".xlsx,.xls" multiple>
     </div>
   </header>
+  <div class="filter-bar">
+    <span>Date range</span>
+    <input type="date" id="filter-start">
+    <span>→</span>
+    <input type="date" id="filter-end">
+    <button type="button" class="filter-clear" id="filter-clear">Clear</button>
+    <span class="filter-info" id="filter-info">All dates</span>
+  </div>
   <nav class="tabs" id="tabs">
     <button type="button" class="tab active" data-tab="overview">Overview</button>
     <button type="button" class="tab" data-tab="tasks">Task Types</button>
     <button type="button" class="tab" data-tab="locations">Locations</button>
     <button type="button" class="tab" data-tab="workers">Workers</button>
-    <button type="button" class="tab" data-tab="performance">Performance</button>
+    <button type="button" class="tab" data-tab="payroll">Payroll</button>
+    <button type="button" class="tab" data-tab="performance">&lt; 1 Minute</button>
+    <button type="button" class="tab" data-tab="low">Low Performers</button>
   </nav>
   <main class="main">
     <div class="source-chips" id="source-chips"></div>
@@ -233,8 +286,27 @@
     </div>
 
     <div class="panel" id="panel-tasks">
-      <div class="card"><div class="card-title">Task Types — Count &amp; Avg Time</div><div class="chart-wrap" style="height:300px"><canvas id="chart-tasks-bar"></canvas></div></div>
-      <div class="card"><div class="card-title">Task Type Table</div><div class="table-wrap"><table><thead><tr><th>Task Type</th><th>Count</th><th>Avg (min)</th><th>Avg (sec)</th><th>Fastest</th><th>Slowest</th></tr></thead><tbody id="table-tasks"></tbody></table></div></div>
+      <div class="card"><div class="card-title">Task Types — Summary (like Excel)</div><div class="chart-wrap" style="height:300px"><canvas id="chart-tasks-bar"></canvas></div></div>
+      <div class="card">
+        <div class="card-title">Task Type Detail</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Task Type</th>
+                <th>Count</th>
+                <th>Avg (mins)</th>
+                <th>Avg (secs)</th>
+                <th>Slowest (mins)</th>
+                <th>Slowest (secs)</th>
+                <th>Fastest (mins)</th>
+                <th>Fastest (secs)</th>
+              </tr>
+            </thead>
+            <tbody id="table-tasks"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div class="panel" id="panel-locations">
@@ -248,12 +320,76 @@
       <div class="card"><div class="card-title">Workers</div><div class="table-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Moves</th><th>Avg Time</th><th>Fastest</th><th>Slowest</th><th>Sub-Min</th></tr></thead><tbody id="table-workers"></tbody></table></div></div>
     </div>
 
+    <div class="panel" id="panel-payroll">
+      <div class="stat-grid">
+        <div class="stat-card blue"><div class="stat-label">Regular Hours</div><div class="stat-value" id="pay-reg">—</div></div>
+        <div class="stat-card orange"><div class="stat-label">Overtime Hours</div><div class="stat-value" id="pay-ot">—</div></div>
+        <div class="stat-card purple"><div class="stat-label">PTO Hours</div><div class="stat-value" id="pay-pto">—</div></div>
+        <div class="stat-card green"><div class="stat-label">Employees</div><div class="stat-value" id="pay-emp">—</div></div>
+        <div class="stat-card accent"><div class="stat-label">Total Paid Hours</div><div class="stat-value" id="pay-total">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Hours by Employee</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Employee</th>
+                <th>Total Hrs</th>
+                <th>Reg</th>
+                <th>OT</th>
+                <th>Lunch</th>
+                <th>PTO</th>
+              </tr>
+            </thead>
+            <tbody id="table-payroll"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div class="panel" id="panel-performance">
       <div class="stat-grid">
         <div class="stat-card purple"><div class="stat-label">Sub-Minute Moves</div><div class="stat-value" id="perf-sub">—</div></div>
         <div class="stat-card red"><div class="stat-label">Blocked by Foundry</div><div class="stat-value" id="perf-blocked">—</div></div>
       </div>
-      <div class="card"><div class="card-title">Sub-Minute by Worker</div><div class="table-wrap"><table><thead><tr><th>Worker</th><th>Sub-Min Count</th></tr></thead><tbody id="table-submin"></tbody></table></div></div>
+      <div class="card">
+        <div class="card-title">&lt; 1 Minute by Worker</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Worker</th>
+                <th>Sub-Min Moves</th>
+                <th>Avg Sub-Min (secs)</th>
+                <th>Sub-Min % of Moves</th>
+              </tr>
+            </thead>
+            <tbody id="table-submin"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-low">
+      <div class="card">
+        <div class="card-title">Low Performers (Scans per Hour)</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Worker</th>
+                <th>Scans</th>
+                <th>Avg Time / Scan</th>
+                <th>Scans / Hour</th>
+              </tr>
+            </thead>
+            <tbody id="table-low-performers"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </main>
   <div class="toast-container" id="toast-container"></div>
