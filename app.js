@@ -563,22 +563,20 @@
     var enriched = scans
       .map(function (s) {
         var avgSecs = s.avgSecs != null && !isNaN(s.avgSecs) && s.avgSecs > 0 ? s.avgSecs : null;
-        var scansPerHour = avgSecs ? 3600 / avgSecs : null;
         return {
           name: s.name,
           scans: s.count || 0,
-          avgSecs: avgSecs,
-          scansPerHour: scansPerHour
+          avgSecs: avgSecs
         };
       })
-      .filter(function (x) { return x.scansPerHour != null; });
+      .filter(function (x) { return x.scans > 0; });
 
     if (!enriched.length) {
       state.lowPerformers = [];
       return;
     }
 
-    enriched.sort(function (a, b) { return a.scansPerHour - b.scansPerHour; });
+    enriched.sort(function (a, b) { return a.scans - b.scans; });
 
     var take = Math.max(5, Math.min(20, Math.round(enriched.length * 0.25)));
     state.lowPerformers = enriched.slice(0, take);
@@ -693,8 +691,7 @@
     var lowBody = document.getElementById('table-low-performers');
     if (lowBody) {
       lowBody.innerHTML = state.lowPerformers.map(function (lp, idx) {
-        var sph = lp.scansPerHour != null ? lp.scansPerHour.toFixed(2) : '—';
-        return '<tr><td>' + (idx + 1) + '</td><td class="cell-name">' + (lp.name || '—') + '</td><td>' + (lp.scans || 0) + '</td><td>' + fmtSecs(lp.avgSecs) + '</td><td>' + sph + '</td></tr>';
+        return '<tr><td>' + (idx + 1) + '</td><td class="cell-name">' + (lp.name || '—') + '</td><td>' + (lp.scans || 0) + '</td><td>' + fmtSecs(lp.avgSecs) + '</td></tr>';
       }).join('');
     }
 
@@ -734,10 +731,10 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: type === 'doughnut', labels: { color: '#a1a1aa' } } },
+        plugins: { legend: { display: type === 'doughnut', labels: { color: '#64748b' } } },
         scales: type !== 'doughnut' ? {
-          x: { ticks: { color: '#a1a1aa', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,.06)' } },
-          y: { ticks: { color: '#a1a1aa' }, grid: { color: 'rgba(255,255,255,.06)' } }
+          x: { ticks: { color: '#64748b', maxRotation: 45 }, grid: { color: 'rgba(0,0,0,.08)' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(0,0,0,.08)' } }
         } : {}
       }
     });

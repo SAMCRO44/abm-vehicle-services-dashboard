@@ -12,18 +12,18 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #050816;
-      --bg-card: #0b1220;
-      --border: rgba(148,163,184,.35);
-      --text: #e5e7eb;
-      --text-muted: #9ca3af;
+      --bg: #d4d8de;
+      --bg-card: #ffffff;
+      --border: rgba(0,0,0,.1);
+      --text: #1e293b;
+      --text-muted: #64748b;
       --accent: #1d4ed8;
-      --accent-dim: rgba(37,99,235,.22);
+      --accent-dim: rgba(37,99,235,.14);
       --green: #15803d;
-      --green-dim: rgba(34,197,94,.18);
-      --orange: #ea580c;
+      --green-dim: rgba(34,197,94,.15);
+      --orange: #c2410c;
       --red: #b91c1c;
-      --red-dim: rgba(248,113,113,.18);
+      --red-dim: rgba(248,113,113,.2);
       --purple: #4f46e5;
       --radius: 10px;
       --radius-sm: 6px;
@@ -59,7 +59,7 @@
       gap: 10px;
     }
     .brand-logo {
-      height: 36px;
+      height: 52px;
       width: auto;
       display: block;
     }
@@ -91,7 +91,7 @@
     .btn:hover { transform: translateY(-1px); }
     .btn-primary {
       background: var(--accent);
-      color: var(--bg);
+      color: #fff;
     }
     .btn-primary:hover { box-shadow: 0 0 20px var(--accent-dim); }
     .btn-ghost {
@@ -108,7 +108,7 @@
       padding: 12px 24px 14px;
       border-bottom: 1px solid var(--border);
       overflow-x: auto;
-      background: radial-gradient(circle at top, rgba(0,0,0,.75), #050509);
+      background: #e2e6eb;
     }
     .tab {
       padding: 10px 16px;
@@ -139,6 +139,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 20px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.05);
     }
     .stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
     .stat-value { font-size: 26px; font-weight: 700; letter-spacing: -.03em; }
@@ -153,6 +154,7 @@
       border-radius: var(--radius);
       padding: 24px;
       margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.05);
     }
     .card-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
     .chart-wrap { height: 260px; position: relative; }
@@ -160,7 +162,7 @@
     @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
     .table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
     .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
-    .table-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 3px; }
+    .table-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 3px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th {
       text-align: left;
@@ -173,7 +175,7 @@
       border-bottom: 1px solid var(--border);
     }
     td { padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--text-muted); }
-    tbody tr:hover td { background: rgba(255,255,255,.04); color: var(--text); }
+    tbody tr:hover td { background: rgba(0,0,0,.04); color: var(--text); }
     .cell-name { font-weight: 600; color: var(--text); }
     .empty { text-align: center; color: var(--text-muted); padding: 48px 24px; }
     .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
@@ -184,26 +186,26 @@
       padding: 14px 20px;
       font-size: 13px;
       font-weight: 500;
-      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      box-shadow: 0 4px 24px rgba(0,0,0,.12);
       animation: slideIn .25s ease;
     }
     .toast.ok { border-left: 4px solid var(--green); }
     .toast.err { border-left: 4px solid var(--red); }
     @keyframes slideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
     .source-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-    .source-chip { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--text-muted); }
+    .source-chip { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--border); color: var(--text-muted); }
     .filter-bar {
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 10px 32px;
       border-bottom: 1px solid var(--border);
-      background: #020617;
+      background: #fff;
       font-size: 13px;
       color: var(--text-muted);
     }
     .filter-bar input[type="date"] {
-      background: #020617;
+      background: #fff;
       border-radius: 8px;
       border: 1px solid var(--border);
       color: var(--text);
@@ -226,7 +228,7 @@
       border-radius: 999px;
     }
     .filter-clear:hover {
-      background: rgba(148,163,184,.16);
+      background: rgba(0,0,0,.06);
       color: var(--text);
     }
     .filter-info {
@@ -272,7 +274,7 @@
     <button type="button" class="tab" data-tab="workers">Workers</button>
     <button type="button" class="tab" data-tab="payroll">Payroll</button>
     <button type="button" class="tab" data-tab="performance">&lt; 1 Minute</button>
-    <button type="button" class="tab" data-tab="low">Low Performers</button>
+    <button type="button" class="tab" data-tab="low">Lowest Workers by Volume</button>
   </nav>
   <main class="main">
     <div class="source-chips" id="source-chips"></div>
@@ -384,7 +386,7 @@
 
     <div class="panel" id="panel-low">
       <div class="card">
-        <div class="card-title">Low Performers (Scans per Hour)</div>
+        <div class="card-title">Lowest Workers by Volume</div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -393,7 +395,6 @@
                 <th>Worker</th>
                 <th>Scans</th>
                 <th>Avg Time / Scan</th>
-                <th>Scans / Hour</th>
               </tr>
             </thead>
             <tbody id="table-low-performers"></tbody>
