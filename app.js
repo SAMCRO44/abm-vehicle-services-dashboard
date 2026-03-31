@@ -630,8 +630,17 @@
     var topWorkers = state.workers.slice(0, 10);
     renderChart('chart-top-workers', 'bar', topWorkers.map(function (w) { return w.name; }), topWorkers.map(function (w) { return w.count; }), 'Moves');
 
-    var topDest = state.endLocations.slice(0, 10);
-    renderChart('chart-destinations', 'bar', topDest.map(function (d) { return d.location; }), topDest.map(function (d) { return d.count; }), 'Count');
+    var overviewLow = state.lowPerformers.slice(0, 10);
+    var cidOverviewLow = 'chart-overview-low-performers';
+    if (overviewLow.length) {
+      renderChart(cidOverviewLow, 'bar',
+        overviewLow.map(function (x) { return x.name; }),
+        overviewLow.map(function (x) { return x.scansPerHour != null ? x.scansPerHour : 0; }),
+        'Scans / hr');
+    } else {
+      var cv = document.getElementById(cidOverviewLow);
+      if (cv && charts[cidOverviewLow]) { charts[cidOverviewLow].destroy(); charts[cidOverviewLow] = null; }
+    }
 
     renderChart('chart-tasks-bar', 'bar', state.taskTypes.map(function (t) { return t.type; }), state.taskTypes.map(function (t) { return t.count || 0; }), 'Count');
 
@@ -734,10 +743,10 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: type === 'doughnut', labels: { color: '#a1a1aa' } } },
+        plugins: { legend: { display: type === 'doughnut', labels: { color: '#64748b' } } },
         scales: type !== 'doughnut' ? {
-          x: { ticks: { color: '#a1a1aa', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,.06)' } },
-          y: { ticks: { color: '#a1a1aa' }, grid: { color: 'rgba(255,255,255,.06)' } }
+          x: { ticks: { color: '#64748b', maxRotation: 45 }, grid: { color: 'rgba(0,0,0,.08)' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(0,0,0,.08)' } }
         } : {}
       }
     });
@@ -832,8 +841,8 @@
     return { min: min, max: max };
   }
 
-  function maybeAutoSetFilter() {
-    if (FILTER.startKey || FILTER.endKey) return;
+  function maybeAutoSetFilter(force) {
+    if (!force && (FILTER.startKey || FILTER.endKey)) return;
     var range = getDataDateRange();
     if (!range.min || !range.max) return;
     FILTER.startKey = range.min;
@@ -851,6 +860,15 @@
     aggregateFromRaw();
     deriveLowPerformers();
     derivePayroll();
+  }
+
+  function recoverFromStaleFilter() {
+    if (!(FILTER.startKey || FILTER.endKey)) return;
+    if (!state.rawMoves.length) return;
+    if (state.workers.length) return;
+    // If a persisted filter excludes everything, reset to actual loaded range.
+    maybeAutoSetFilter(true);
+    runPipeline();
   }
 
   function saveToServer(cb) {
@@ -881,6 +899,7 @@
       if (fe && FILTER.endKey) fe.value = FILTER.endKey;
       if (!FILTER.startKey && !FILTER.endKey) maybeAutoSetFilter();
       runPipeline();
+      recoverFromStaleFilter();
       render();
       var total = (state.rawMoves.length || 0) + (state.payrollRows.length || 0) + (state.scans.length || 0);
       if (total > 0) toast('Loaded cached data: ' + (state.rawMoves.length || 0) + ' moves, ' + (state.sourceFiles.length || 0) + ' file(s).', 'ok');
@@ -889,15 +908,63 @@
 
   function onFiles(files) {
     if (!files || !files.length) return;
+    var prevMovesLen = state.rawMoves.length;
+    var prevPayrollLen = state.payrollRows.length;
+    var prevScansLen = state.scans.length;
     var read = 0;
     var total = files.length;
     var skipped = 0;
+
+    function replaceDateRangeWithNewData() {
+      var newMoves = state.rawMoves.slice(prevMovesLen);
+      var newPayroll = state.payrollRows.slice(prevPayrollLen);
+      var newScans = state.scans.slice(prevScansLen);
+
+      var min = null, max = null;
+      newMoves.forEach(function (m) {
+        var dk = m.startDate ? dateKey(m.startDate) : null;
+        if (dk) { if (!min || dk < min) min = dk; if (!max || dk > max) max = dk; }
+      });
+      newPayroll.forEach(function (r) {
+        var dk = r.dateKey;
+        if (dk) { if (!min || dk < min) min = dk; if (!max || dk > max) max = dk; }
+      });
+      newScans.forEach(function (s) {
+        var dk = s.dateKey;
+        if (dk) { if (!min || dk < min) min = dk; if (!max || dk > max) max = dk; }
+      });
+      if (!min || !max) return;
+
+      function inRange(dk) {
+        if (!dk) return false;
+        if (dk < min) return false;
+        if (dk > max) return false;
+        return true;
+      }
+
+      var oldMoves = state.rawMoves.slice(0, prevMovesLen).filter(function (m) {
+        var dk = m.startDate ? dateKey(m.startDate) : null;
+        return !inRange(dk);
+      });
+      var oldPayroll = state.payrollRows.slice(0, prevPayrollLen).filter(function (r) {
+        return !inRange(r.dateKey);
+      });
+      var oldScans = state.scans.slice(0, prevScansLen).filter(function (s) {
+        return !inRange(s.dateKey);
+      });
+
+      state.rawMoves = oldMoves.concat(newMoves);
+      state.payrollRows = oldPayroll.concat(newPayroll);
+      state.scans = oldScans.concat(newScans);
+    }
     function done() {
       read++;
       if (read >= total) {
+        replaceDateRangeWithNewData();
         runPipeline();
-        maybeAutoSetFilter();
+        maybeAutoSetFilter(true);
         runPipeline();
+        recoverFromStaleFilter();
         render();
         saveToServer(function () {
           var msg = 'Imported ' + (total - skipped) + ' file(s)';
